@@ -135,7 +135,7 @@ from acdc.greaterthan.utils import get_all_greaterthan_things, get_greaterthan_t
 from pathlib import Path
 
 from notebooks.emacs_plotly_render import set_plotly_renderer
-set_plotly_renderer("emacs")
+# set_plotly_renderer("emacs")
 
 
 def get_col(df, col): # dumb util
@@ -152,7 +152,7 @@ parser.add_argument("--mode", type=str, required=False, choices=["edges", "nodes
 parser.add_argument('--zero-ablation', action='store_true', help='Use zero ablation')
 parser.add_argument('--metric', type=str, default="kl_div", help="Which metric to use for the experiment")
 parser.add_argument('--reset-network', type=int, default=0, help="Whether to reset the network we're operating on before running interp on it")
-parser.add_argument("--alg", type=str, default="none", choices=["none", "acdc", "sp", "16h", "canonical"])
+parser.add_argument("--alg", type=str, default="none", choices=["none", "acdc", "sp", "16h", "pig", "canonical"])
 parser.add_argument("--skip-sixteen-heads", action="store_true", help="Skip the 16 heads stuff")
 parser.add_argument("--skip-sp", action="store_true", help="Skip the SP stuff")
 parser.add_argument("--testing", action="store_true", help="Use testing data instead of validation data")
@@ -164,10 +164,17 @@ parser.add_argument("--canonical-graph-save-dir", type=str, default="DEFAULT")
 parser.add_argument("--only-save-canonical", action="store_true", help="Only save the canonical graph")
 parser.add_argument("--ignore-missing-score", action="store_true", help="Ignore runs that are missing score")
 
-if IPython.get_ipython() is not None:
-    args = parser.parse_args("--task=tracr-reverse --metric=l2 --alg=acdc".split())
-    if "arthur" not in __file__:
-        __file__ = "/Users/adria/Documents/2023/ACDC/Automatic-Circuit-Discovery/notebooks/roc_plot_generator.py"
+repo_root = "/Users/josephmiller/Documents/Automatic-Circuit-Discovery"
+if IPython.get_ipython() is not None: # heheh get around this failing in notebooks
+    args = parser.parse_args(
+        [line.strip() for line in r"""
+            --alg=pig\
+            --task=tracr-reverse\
+            --metric=l2\
+            --skip-sp\
+            --skip-sixteen-heads
+        """.split("\\\n")]
+    )
 else:
     args = parser.parse_args()
 
@@ -193,8 +200,8 @@ TESTING = True if args.testing else False
 ONLY_SAVE_CANONICAL = True if args.only_save_canonical else False
 
 if args.out_dir == "DEFAULT":
-    OUT_DIR = Path(__file__).resolve().parent.parent / "experiments" / "results" / f"{'arthur_' if 'arthur' in __file__ else ''}plots_data"
-    CANONICAL_OUT_DIR = Path(__file__).resolve().parent.parent / "experiments" / "results" / "canonical_circuits"
+    OUT_DIR = Path(repo_root).resolve() / "experiments" / "results" / f"{'arthur_' if 'arthur' in __file__ else ''}plots_data"
+    CANONICAL_OUT_DIR = Path(repo_root).resolve() / "experiments" / "results" / "canonical_circuits"
 else:
     OUT_DIR = Path(args.out_dir)
     CANONICAL_OUT_DIR = Path(args.canonical_graph_save_dir)
@@ -204,20 +211,23 @@ if args.alg != "none":
     SKIP_ACDC = False if args.alg == "acdc" else True
     SKIP_SP = False if args.alg == "sp" else True
     SKIP_SIXTEEN_HEADS = False if args.alg == "16h" else True
+    SKIP_PIG = False if args.alg == "pig" else True
     SKIP_CANONICAL = False if args.alg == "canonical" else True
     OUT_FILE = OUT_DIR / f"{args.alg}-{args.task}-{args.metric}-{args.zero_ablation}-{args.reset_network}.json"
+    print("args.alg", args.alg, "args.task", args.task, "args.metric", args.metric, "args.zero_ablation", args.zero_ablation, "args.reset_network", args.reset_network)
+    print("OUT_FILE", OUT_FILE)
 
-    if OUT_FILE.exists():
-        print("File already exists, skipping")
-        sys.exit(0)
+    # if OUT_FILE.exists():
+    #     print("File already exists, skipping")
+    #     sys.exit(0)
 else:
     OUT_FILE = None
 
 # defaults
-ACDC_PROJECT_NAME = "remix_school-of-rock/acdc"
+ACDC_PROJECT_NAME = "acdc-test"
 ACDC_PRE_RUN_FILTER = {
     # Purposefully omit ``"state": "finished"``
-    "group": "acdc-spreadsheet2",
+    "group": "default",
     "config.task": TASK,
     "config.metric": METRIC,
     "config.zero_ablation": ZERO_ABLATION,
@@ -237,7 +247,7 @@ SP_PRE_RUN_FILTER = {
 SP_RUN_FILTER = None
 
 # # for 16 heads it's just one run but this way we just use the same code
-SIXTEEN_HEADS_PROJECT_NAME = "remix_school-of-rock/acdc"
+SIXTEEN_HEADS_PROJECT_NAME = "remix_school-of-rock/induction-16-heads-replicate"
 SIXTEEN_HEADS_PRE_RUN_FILTER = {
     "state": "finished",
     "group": "sixteen-heads",
@@ -248,10 +258,23 @@ SIXTEEN_HEADS_PRE_RUN_FILTER = {
 }
 SIXTEEN_HEADS_RUN_FILTER = None
 
+PIG_PROJECT_NAME = "pig-real-6"
+PIG_PRE_RUN_FILTER = {
+    "state": "finished",
+    "group": "pig",
+    "config.task": TASK,
+    "config.metric": METRIC,
+    "config.zero_ablation": ZERO_ABLATION,
+    "config.reset_network": RESET_NETWORK,
+}
+PIG_RUN_FILTER = None
+
 USE_POS_EMBED = False
 
 
-ROOT = Path(os.environ["HOME"]) / ".cache" / "artifacts_for_plot"
+CACHE = Path(repo_root) / ".cache"
+CACHE.mkdir(exist_ok=True)
+ROOT = Path(repo_root) / ".cache" / "artifacts_for_plot"
 ROOT.mkdir(exist_ok=True)
 
 #%% [markdown]
@@ -291,7 +314,7 @@ elif TASK in ["tracr-reverse", "tracr-proportion"]: # do tracr
     
     if not ZERO_ABLATION:
         ACDC_PRE_RUN_FILTER.pop("group")
-        ACDC_PROJECT_NAME = "remix_school-of-rock/arthur_tracr_fix"
+        # ACDC_PROJECT_NAME = "remix_school-of-rock/arthur_tracr_fix"
 
     things = get_all_tracr_things(task=tracr_task, metric_name=METRIC, num_examples=num_examples, device=DEVICE)
 
@@ -363,11 +386,11 @@ elif TASK == "induction":
     num_examples=50
     things = get_all_induction_things(num_examples=num_examples, seq_len=300, device=DEVICE, metric=METRIC)
 
-    if RESET_NETWORK:
-        ACDC_PRE_RUN_FILTER["group"] = "reset-networks-neurips"
-    else:
+    # if RESET_NETWORK:
+        # ACDC_PRE_RUN_FILTER["group"] = "reset-networks-neurips"
+    # else:
         # ACDC_PRE_RUN_FILTER["group"] = "adria-induction-2"
-        ACDC_PRE_RUN_FILTER["group"] = "adria-induction-3"
+        # ACDC_PRE_RUN_FILTER["group"] = "adria-induction-3"
 else:
     raise NotImplementedError("TODO " + TASK)
 
@@ -513,6 +536,8 @@ def get_acdc_runs(
 # clip = None
 # return_ids = False
 # if True:
+    print("Get ACDC runs")
+    print("exp", exp, "project_name", project_name, "pre_run_filter", pre_run_filter, "run_filter", run_filter, "clip", clip, "return_ids", return_ids)
     if clip is None:
         clip = 100_000 # so we don't clip anything
 
@@ -648,8 +673,10 @@ def get_acdc_runs(
                     continue
 
         else:
+            print(f"Edges.pth found for run {run.name}, loading it")
             corr = deepcopy(exp.corr)
             all_edges = corr.all_edges()
+            print("all edges:", len(all_edges))
             for edge in all_edges.values():
                 edge.present = False
 
@@ -661,11 +688,12 @@ def get_acdc_runs(
                     with open(fopen.name, "rb") as fopenb:
                         edges_pth = pickle.load(fopenb)
 
+            print("edges_pth:", edges_pth)
             for (n_to, idx_to, n_from, idx_from), _effect_size in edges_pth:
                 n_to = n_to.replace("hook_resid_mid", "hook_mlp_in")
                 n_from = n_from.replace("hook_resid_mid", "hook_mlp_in")
                 all_edges[(n_to, idx_to, n_from, idx_from)].present = True
-
+            
             add_run_for_processing(AcdcRunCandidate(
                 threshold=threshold,
                 steps=score_d["steps"],
@@ -694,8 +722,8 @@ def get_acdc_runs(
 if not SKIP_ACDC: # this is slow, so run once
     print(ACDC_PROJECT_NAME, ACDC_PRE_RUN_FILTER)
     acdc_corrs, ids = get_acdc_runs(None if things is None else exp, clip = 1 if TESTING else None, return_ids = True)
-    assert len(acdc_corrs) > 1
     print("acdc_corrs", len(acdc_corrs))
+    assert len(acdc_corrs) > 1
 
 # %%
 
@@ -839,6 +867,53 @@ if "sixteen_heads_corrs" not in locals() and not SKIP_SIXTEEN_HEADS: # this is s
     print("sixteen_heads_corrs", len(sixteen_heads_corrs))
 
 #%%
+def get_pig_corrs(
+    project_name = PIG_PROJECT_NAME,
+    pre_run_filter = PIG_PRE_RUN_FILTER,
+    run_filter = PIG_RUN_FILTER,
+    model= None if things is None else things.tl_model,
+):
+    api = wandb.Api()
+    print("project_name", project_name, "pre_run_filter", pre_run_filter)
+    runs = api.runs(project_name, filters=pre_run_filter)
+    if run_filter is None:
+        run = runs[0]
+    else:
+        run = None
+        for r in runs:
+            if run_filter(r):
+                run = r
+                break
+        assert run is not None
+
+    nodes_names_indices = run.summary["nodes_names_indices"]
+
+    nodes_to_mask = []
+    cum_score = 0.0
+    test_keys = [k for k in run.summary.keys() if k.startswith("test")]
+    score_d_list = list(run.scan_history(keys=test_keys, page_size=100000))
+    assert len(score_d_list) == len(nodes_names_indices) + 1
+
+    corrs = [(correspondence_from_mask(model=model, nodes_to_mask=[], use_pos_embed=exp.use_pos_embed), {"score": 0.0, **score_d_list[0]})]
+    for (nodes, hook_name, idx, score), score_d in tqdm(zip(nodes_names_indices, score_d_list[1:])):
+        if score == "NaN":
+            score = 0.0
+        if things is None:
+            corr = None
+        else:
+            nodes_to_mask += list(map(parse_interpnode, nodes))
+            corr = correspondence_from_mask(model=model, nodes_to_mask=nodes_to_mask, use_pos_embed=exp.use_pos_embed)
+        cum_score += score
+        score_d = {"score": cum_score, **score_d}
+        corrs.append((corr, score_d))
+    return corrs
+
+if "pig_corrs" not in locals() and not SKIP_PIG: # this is slow, so run once
+    pig_corrs = get_pig_corrs()
+    assert len(pig_corrs) > 1
+    print("pig_corrs", len(pig_corrs))
+
+#%%
 
 methods = []
 
@@ -846,6 +921,7 @@ if not SKIP_CANONICAL: methods.append("CANONICAL")
 if not SKIP_ACDC: methods.append("ACDC") 
 if not SKIP_SP: methods.append("SP")
 if not SKIP_SIXTEEN_HEADS: methods.append("16H")
+if not SKIP_PIG: methods.append("PIG")
 
 #%%
 
@@ -855,8 +931,11 @@ def get_points(corrs_and_scores, decreasing=True):
 # decreasing = True
 # if True:
     keys = set()
+    print("corr_and_scores", len(corrs_and_scores))
     for _, s in corrs_and_scores:
         keys.update(s.keys())
+    
+    print("keys", keys)
 
     init_point = {k: math.inf for k in keys}
     for prefix in ["edge", "node"]:
@@ -885,6 +964,7 @@ def get_points(corrs_and_scores, decreasing=True):
     n_skipped = 0
 
     for idx, (corr, score) in tqdm(enumerate(sorted(corrs_and_scores, key=lambda x: x[1]["score"], reverse=decreasing))):
+        print("idx", idx, "corr", corr, "score", score)
         if set(score.keys()) != keys:
             a = init_point.copy()
             a.update(score)
@@ -927,6 +1007,7 @@ def get_points(corrs_and_scores, decreasing=True):
     points.append(end_point)
     assert all(("n_edges" in p) for p in points)
     assert len(points) > 3
+    print("points", len(points))
     return points
 
 points = {}
@@ -957,13 +1038,18 @@ if "16H" in methods:
 
 #%%
 
+if "PIG" in methods:
+    if "PIG" not in points: points["PIG"] = []
+    points["PIG"].extend(get_points(pig_corrs, decreasing=False))
+
+#%%
+
 def get_roc_figure(all_points, names): # TODO make the plots grey / black / yellow?
     """Points are (false positive rate, true positive rate)"""
     roc_figure = go.Figure()
     for points, name in zip(all_points, names):
         try: # TODO test this try block
             points[0].keys()     
-    
         except:
             x = [p[0] for p in points]
             y = [p[1] for p in points]
@@ -977,7 +1063,6 @@ def get_roc_figure(all_points, names): # TODO make the plots grey / black / yell
                 if "tpr" in key:
                     y = [p[key] for p in points]
             assert x is not None and y is not None, "Could not process with either indices or keys"
-        
         roc_figure.add_trace(
             go.Scatter(
                 x=x,
@@ -991,6 +1076,7 @@ def get_roc_figure(all_points, names): # TODO make the plots grey / black / yell
     roc_figure.update_yaxes(title_text="True positive rate")
     return roc_figure
 
+print("OUT_FILE", OUT_FILE)
 if OUT_FILE is None:
     fig = get_roc_figure(list(points.values()), list(points.keys()))
     fig.show()
@@ -1020,6 +1106,7 @@ if OUT_FILE is not None:
         },
     }
 
+    print("writing to", OUT_FILE)
     with open(OUT_FILE, "w") as f:
         json.dump(out_dict, f, indent=2)
 
