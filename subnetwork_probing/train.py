@@ -80,6 +80,43 @@ def correspondence_from_mask(model: HookedTransformer, nodes_to_mask: list[TLACD
     return corr
 
 
+def iterative_correspondence_from_mask(corr:TLACDCCorrespondence, head_parents, model: HookedTransformer, new_nodes: list[TLACDCInterpNode], use_pos_embed: bool = False, newv = False) -> TLACDCCorrespondence:
+    if corr is None:
+        corr = TLACDCCorrespondence.setup_from_model(model, use_pos_embed=use_pos_embed)
+    if head_parents is None:
+        head_parents = collections.defaultdict(lambda: 0)
+
+    additional_nodes_to_mask = []
+
+    for node in new_nodes:
+        additional_nodes_to_mask.append(TLACDCInterpNode(node.name.replace(".attn.", ".") + "_input", node.index, EdgeType.ADDITION))
+
+        if node.name.endswith("_q") or node.name.endswith("_k") or node.name.endswith("_v"):
+            child_name = node.name.replace("_q", "_result").replace("_k", "_result").replace("_v", "_result")
+            head_parents[(child_name, node.index)] += 1
+
+            # Forgot to add these in earlier versions of Subnetwork Probing, and so the edge counts were inflated
+            additional_nodes_to_mask.append(TLACDCInterpNode(child_name + "_input", node.index, EdgeType.ADDITION))
+
+            if head_parents[child_name, node.index] == 3:
+                additional_nodes_to_mask.append(TLACDCInterpNode(child_name, node.index, EdgeType.ADDITION))
+
+    for node in new_nodes + additional_nodes_to_mask:
+        # Mark edges where this is child as not present
+        rest2 = corr.edges[node.name][node.index]
+        for rest3 in rest2.values():
+            for edge in rest3.values():
+                edge.present = False
+
+        # Mark edges where this is parent as not present
+        for rest1 in corr.edges.values():
+            for rest2 in rest1.values():
+                try:
+                    rest2[node.name][node.index].present = False
+                except KeyError:
+                    pass
+    return corr, head_parents
+
 
 def log_plotly_bar_chart(x: List[str], y: List[float]) -> None:
     import plotly.graph_objects as go
