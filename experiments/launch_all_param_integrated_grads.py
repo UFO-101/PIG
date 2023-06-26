@@ -9,7 +9,7 @@ METRICS_FOR_TASK = {
     "tracr-proportion": ["kl_div", "l2"],
     "induction": ["kl_div", "nll"],
     "docstring": ["kl_div", "docstring_metric"],
-    "greaterthan": ["greaterthan"],  # "kl_div",
+    "greaterthan": ["greaterthan", "kl_div"],
 }
 
 
@@ -22,7 +22,7 @@ def main(TASKS: list[str], job: KubernetesJob, name: str, group_name: str):
     wandb_identifier = WandbIdentifier(
         run_name=f"{name}-{{i:05d}}",
         group_name=group_name,
-        project="pig-real-6")
+        project="pig-not-normalized")
 
     commands: List[List[str]] = []
     for reset_network in [0, 1]:
@@ -70,7 +70,7 @@ def main(TASKS: list[str], job: KubernetesJob, name: str, group_name: str):
 if __name__ == "__main__":
     main(
         ["induction", "docstring", "tracr-reverse", "tracr-proportion"],
-        # ["docstring"],
+        # ["greaterthan"],
         None,
         "pig",
         group_name="pig",

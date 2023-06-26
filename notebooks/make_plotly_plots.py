@@ -24,8 +24,8 @@ if ipython is not None:
         initial_path = initial_path.parent
     __file__ = str(initial_path / "notebooks" / "make_plotly_plots.py")
 
-    if IS_ADRIA:
-          set_plotly_renderer("emacs")
+    # if IS_ADRIA:
+    #       set_plotly_renderer("emacs")
 
 import plotly
 import numpy as np
@@ -133,7 +133,7 @@ if args.hisp_yellow:
         "ACDC": "Purp_r",
         "SP": "Greens_r",
         "HISP": "YlOrBr_r",
-        "PIG": "Blues_r",
+        "PIG": "Blues",
     }
 else:
     colorscale_names = {
@@ -186,7 +186,7 @@ score_name = {
     "ACDC": "threshold",
     "SP": "lambda",
     "HISP": "score",
-    "PIG": "idk",
+    "PIG": "attribution",
 }
 
 
@@ -226,26 +226,25 @@ def make_fig(metric_idx=0, x_key="edge_fpr", y_key="edge_tpr", weights_types=("t
     RIGHT_MARGIN = 0.02 if y_key in ["edge_tpr", "node_tpr"] else 0.00
     if plot_type in ["roc_nodes", "roc_edges", "precision_recall"]:
         rows_cols_task_idx = [
-            # ((1, 1), "ioi"),
+            ((1, 1), "ioi"),
             ((1, 3), "tracr-reverse"),
             ((1, 4), "tracr-proportion"),
             ((2, 3), "docstring"),
-            # ((2, 4), "greaterthan"),
+            ((2, 4), "greaterthan"),
         ]
         specs=[[{"rowspan": 2, "colspan": 2}, None, {}, {}, {"rowspan": 2, "colspan": 1, "t": TOP_MARGIN, "l": LEFT_MARGIN, "r": RIGHT_MARGIN}], [None, None, {}, {}, None]]
         column_widths = [0.24, 0.24, 0.24, 0.24, 0.04]
-        # subplot_titles = ("ioi", "tracr-reverse", "tracr-proportion", THRESHOLD_ANNOTATION, "docstring", "greaterthan")
-        subplot_titles = ("tracr-reverse", "tracr-proportion", THRESHOLD_ANNOTATION, "docstring")
+        subplot_titles = ("ioi", "tracr-reverse", "tracr-proportion", THRESHOLD_ANNOTATION, "docstring", "greaterthan")
         subplot_titles = [TASK_NAMES.get(task_idx, task_idx) for task_idx in subplot_titles]
 
     elif plot_type in ["kl_edges_4", "metric_edges_4"]:
         rows_cols_task_idx = [
-            # ((1, 1), "ioi"),
-            # ((1, 2), "greaterthan"),
+            ((1, 1), "ioi"),
+            ((1, 2), "greaterthan"),
             ((2, 1), "induction"),
             ((2, 2), "docstring"),
-            # ((1, 3), "ioi"),
-            # ((1, 4), "greaterthan"),
+            ((1, 3), "ioi"),
+            ((1, 4), "greaterthan"),
             ((2, 3), "induction"),
             ((2, 4), "docstring"),
         ]
@@ -254,8 +253,7 @@ def make_fig(metric_idx=0, x_key="edge_fpr", y_key="edge_tpr", weights_types=("t
             [{}, {}, {}, {}, None],
         ]
         column_widths = [0.24, 0.24, 0.24, 0.24, 0.04]
-        # subplot_titles = ("ioi", "greaterthan", "ioi", "greaterthan", THRESHOLD_ANNOTATION, "induction", "docstring", "induction", "docstring")
-        subplot_titles = (THRESHOLD_ANNOTATION, "induction", "docstring", "induction", "docstring")
+        subplot_titles = ("ioi", "greaterthan", "ioi", "greaterthan", THRESHOLD_ANNOTATION, "induction", "docstring", "induction", "docstring")
         subplot_titles = [TASK_NAMES.get(task_idx, task_idx) for task_idx in subplot_titles]
         for i in [0, 1, 5, 6]:
             subplot_titles[i] += " (corrupted)"
@@ -271,18 +269,17 @@ def make_fig(metric_idx=0, x_key="edge_fpr", y_key="edge_tpr", weights_types=("t
         subplot_titles = (TASK_NAMES["induction"] + " (corrupted)", TASK_NAMES["induction"] + " (zero)", THRESHOLD_ANNOTATION)
     else:
         rows_cols_task_idx = [
-            # ((1, 1), "ioi"),
+            ((1, 1), "ioi"),
             ((1, 2), "tracr-reverse"),
             ((1, 3), "tracr-proportion"),
             ((2, 1), "induction"),
             ((2, 2), "docstring"),
-            # ((2, 3), "greaterthan"),
+            ((2, 3), "greaterthan"),
         ]
         # t: top padding
         specs = [[{}, {}, {}, {"rowspan": 2, "colspan": 1, "t": TOP_MARGIN, "l": LEFT_MARGIN, "r": RIGHT_MARGIN}], [{}, {}, {}, None]]
         column_widths = [0.32, 0.32, 0.32, 0.04]
-        # subplot_titles = ("ioi", "tracr-reverse", "tracr-proportion", THRESHOLD_ANNOTATION, "induction", "docstring", "greaterthan")
-        subplot_titles = ("tracr-reverse", "tracr-proportion", THRESHOLD_ANNOTATION, "induction", "docstring")
+        subplot_titles = ("ioi", "tracr-reverse", "tracr-proportion", THRESHOLD_ANNOTATION, "induction", "docstring", "greaterthan")
         subplot_titles = [TASK_NAMES.get(task_idx, task_idx) for task_idx in subplot_titles]
 
     rows_and_cols, task_idxs = list(zip(*rows_cols_task_idx))
@@ -356,7 +353,7 @@ def make_fig(metric_idx=0, x_key="edge_fpr", y_key="edge_tpr", weights_types=("t
             out = (x - x_min) / (x_max - x_min) * (scale_max - scale_min)  + scale_min
         return out
 
-    HEATMAP_ALGS = ["ACDC", "SP", "HISP"]
+    HEATMAP_ALGS = ["ACDC", "SP", "HISP", "PIG"]
     for i, methodof in enumerate(HEATMAP_ALGS):
         alg_min, alg_max = bounds_for_alg[methodof]
         # nums = normalize(heatmap_ys, alg_min, alg_max)

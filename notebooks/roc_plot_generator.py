@@ -258,7 +258,7 @@ SIXTEEN_HEADS_PRE_RUN_FILTER = {
 }
 SIXTEEN_HEADS_RUN_FILTER = None
 
-PIG_PROJECT_NAME = "pig-real-6"
+PIG_PROJECT_NAME = "pig-overnight-2"
 PIG_PRE_RUN_FILTER = {
     "state": "finished",
     "group": "pig",
@@ -867,6 +867,8 @@ if "sixteen_heads_corrs" not in locals() and not SKIP_SIXTEEN_HEADS: # this is s
     print("sixteen_heads_corrs", len(sixteen_heads_corrs))
 
 #%%
+import copy
+
 def get_pig_corrs(
     project_name = PIG_PROJECT_NAME,
     pre_run_filter = PIG_PRE_RUN_FILTER,
@@ -888,24 +890,25 @@ def get_pig_corrs(
 
     nodes_names_indices = run.summary["nodes_names_indices"]
 
-    nodes_to_mask = []
     cum_score = 0.0
     test_keys = [k for k in run.summary.keys() if k.startswith("test")]
     score_d_list = list(run.scan_history(keys=test_keys, page_size=100000))
     assert len(score_d_list) == len(nodes_names_indices) + 1
 
     corrs = [(correspondence_from_mask(model=model, nodes_to_mask=[], use_pos_embed=exp.use_pos_embed), {"score": 0.0, **score_d_list[0]})]
+    corr = None
+    head_parents = None
     for (nodes, hook_name, idx, score), score_d in tqdm(zip(nodes_names_indices, score_d_list[1:])):
         if score == "NaN":
             score = 0.0
         if things is None:
             corr = None
         else:
-            nodes_to_mask += list(map(parse_interpnode, nodes))
-            corr = correspondence_from_mask(model=model, nodes_to_mask=nodes_to_mask, use_pos_embed=exp.use_pos_embed)
+            new_nodes = list(map(parse_interpnode, nodes))
+            corr, head_parents = iterative_correspondence_from_mask(corr=corr, head_parents=head_parents, model=model, new_nodes=new_nodes, use_pos_embed=exp.use_pos_embed)
         cum_score += score
         score_d = {"score": cum_score, **score_d}
-        corrs.append((corr, score_d))
+        corrs.append((copy.deepcopy(corr), score_d))
     return corrs
 
 if "pig_corrs" not in locals() and not SKIP_PIG: # this is slow, so run once

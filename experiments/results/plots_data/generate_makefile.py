@@ -3,8 +3,8 @@ from pathlib import Path
 from experiments.launcher import KubernetesJob, launch
 import shlex
 
-# TASKS = ["ioi", "docstring", "greaterthan", "tracr-reverse", "tracr-proportion", "induction"]
-TASKS = ["docstring", "tracr-reverse", "tracr-proportion", "induction"]
+TASKS = ["ioi", "docstring", "greaterthan", "tracr-reverse", "tracr-proportion", "induction"]
+# TASKS = ["docstring", "tracr-reverse", "tracr-proportion", "induction"]
 
 METRICS_FOR_TASK = {
     "ioi": ["kl_div", "logit_diff"],

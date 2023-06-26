@@ -47,7 +47,7 @@ from acdc.ioi.utils import get_all_ioi_things
 from acdc.TLACDCExperiment import TLACDCExperiment
 from acdc.TLACDCInterpNode import TLACDCInterpNode, heads_to_nodes_to_mask
 from acdc.tracr_task.utils import get_all_tracr_things
-from subnetwork_probing.train import correspondence_from_mask
+from subnetwork_probing.train import correspondence_from_mask, iterative_correspondence_from_mask
 from notebooks.emacs_plotly_render import set_plotly_renderer
 
 from subnetwork_probing.transformer_lens.transformer_lens.HookedTransformer import HookedTransformer as SPHookedTransformer
@@ -79,7 +79,7 @@ if get_ipython() is not None: # heheh get around this failing in notebooks
     args = parser.parse_args([line.strip() for line in r"""--task=docstring \
 --wandb-group=pig \
 --wandb-entity=josephmiller101\
---wandb-project=pig-test-2 \
+--wandb-project=pig-not-normalized-1 \
 --device=cpu \
 --metric=docstring_metric \
 --reset-network=0
@@ -216,7 +216,7 @@ if model.cfg.attn_only == True or model.cfg.d_mlp == -1:
         if "mlp" in k:
             del pig_scores[k]
 
-SAMPLES = 50
+SAMPLES = 200
 weights_to_attribute = {}
 for n in pig_scores.keys():
     if "attn.hook" in n:
@@ -254,6 +254,7 @@ for i in range(0, SAMPLES + 1):
     # Run the model
     validation_output = model(things.validation_data)
     loss = things.validation_metric(validation_output, return_one_element=False).mean()
+    # loss = validation_output.mean()
     loss.backward()
 
     if prev_loss is not None and prev_grads is not None:
@@ -320,8 +321,8 @@ for layer_i in range(model.cfg.n_layers):
     norm = layer_vector.norm()
 
     # normalize by L2 of the layers
-    for k in keys:
-        pig_scores[k] /= norm.clamp(min=1e-6)
+    # for k in keys:
+    #     pig_scores[k] /= norm.clamp(min=1e-6)
 
     for qkv in ["q", "k", "v"]:
         for head_i in range(model.cfg.n_heads):
@@ -364,10 +365,14 @@ do_random_resample_caching(model, things.test_patch_data)
 if args.zero_ablation:
     do_zero_caching(model)
 
+import copy
 nodes_to_mask = []
+corr = None
+head_parents = None
 for nodes, hook_name, idx in tqdm.tqdm(nodes_names_indices):
     nodes_to_mask += nodes
-    corr = correspondence_from_mask(model, nodes_to_mask, use_pos_embed=False, newv=False)
+    # COMPARE TO OLD!!!
+    corr, head_parents = iterative_correspondence_from_mask(corr, head_parents, model, new_nodes=nodes, use_pos_embed=False, newv=False)
     for e in corr.all_edges().values():
         e.effect_size = 1.0
 
