@@ -1,32 +1,20 @@
-from experiments.launcher import KubernetesJob, WandbIdentifier, launch
+from launcher import KubernetesJob, WandbIdentifier, launch
 import numpy as np
 import random
 from typing import List
 
-METRICS_FOR_TASK = {
-    "ioi": ["kl_div", "logit_diff"],
-    "tracr-reverse": ["l2"],
-    "tracr-proportion": ["kl_div", "l2"],
-    "induction": ["kl_div", "nll"],
-    "docstring": ["kl_div", "docstring_metric"],
-    "greaterthan": ["greaterthan", "kl_div"],
-}
-
-
-CPU = 2
-
-def main(TASKS: list[str], job: KubernetesJob, name: str, group_name: str):
+def main(TASKS: list[str], job: KubernetesJob, name: str, group_name: str, synchronous=True):
     seed = 1259281515
     random.seed(seed)
 
     wandb_identifier = WandbIdentifier(
         run_name=f"{name}-{{i:05d}}",
         group_name=group_name,
-        project="pig-not-normalized")
+        project=WANDB_PROJECT)
 
     commands: List[List[str]] = []
-    for reset_network in [0, 1]:
-        for zero_ablation in [0, 1]:
+    for reset_network in RESET_NETWORK:
+        for zero_ablation in ZERO_ABLATION:
             for task in TASKS:
                 for metric in METRICS_FOR_TASK[task]:
                     # if "tracr" not in task:
@@ -56,27 +44,53 @@ def main(TASKS: list[str], job: KubernetesJob, name: str, group_name: str):
 
                     commands.append(command)
 
-
     launch(
         commands,
         name=wandb_identifier.run_name,
         job=job,
         check_wandb=wandb_identifier,
         just_print_commands=False,
-        synchronous=True,
+        synchronous=synchronous,
     )
 
+METRICS_FOR_TASK = {
+    # "ioi": ["kl_div", "logit_diff"],
+    # "tracr-reverse": ["l2"],
+    # "tracr-proportion": ["kl_div", "l2"],
+    # "induction": ["kl_div", "nll"],
+    # "docstring": ["kl_div", "docstring_metric"],
+    # "greaterthan": ["greaterthan", "kl_div"],
+    "ioi": ["kl_div"],
+    "tracr-reverse": ["l2"],
+    "tracr-proportion": ["l2"],
+    "induction": ["kl_div"],
+    "docstring": ["kl_div"],
+    "greaterthan": ["kl_div"]
+}
+# RESET_NETWORK = [0, 1]
+RESET_NETWORK = [0]
+# ZERO_ABLATION = [0, 1]
+ZERO_ABLATION = [0]
+HOFVARPNIR = False
+WANDB_PROJECT = "pig-init-weights-fix-local-1"
+TASKS = ["ioi", "greaterthan", "induction", "docstring", "tracr-reverse", "tracr-proportion"]
+# TASKS = ["induction", "docstring", "tracr-reverse", "tracr-proportion"]
+# CPU = 2
 
 if __name__ == "__main__":
-    main(
-        ["induction", "docstring", "tracr-reverse", "tracr-proportion"],
-        # ["greaterthan"],
-        None,
-        "pig",
-        group_name="pig",
-    )
-    # main(
-    #     ["tracr-reverse", "tracr-proportion"],
-    #     KubernetesJob(container="ghcr.io/rhaps0dy/automatic-circuit-discovery:1.6.1", cpu=4, gpu=0),
-    #     "16h-tracr",
-    # )
+    if HOFVARPNIR:
+        main(
+            TASKS,
+            KubernetesJob(container="ufo101/acdc-pig:1.0", cpu=2, gpu=0, memory="4Gi"),
+            name="pig",
+            group_name="pig",
+            synchronous=False
+        )
+    else:
+        main(
+            TASKS,
+            None,
+            name="pig",
+            group_name="pig",
+            synchronous=False
+        )

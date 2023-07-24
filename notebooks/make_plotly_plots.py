@@ -806,14 +806,24 @@ plot_type_keys = {
 
 #%%
 
-PLOT_DIR = DATA_DIR.parent / "plots"
+PLOT_DIR = DATA_DIR.parent / "plots-init-weights-fix"
 PLOT_DIR.mkdir(exist_ok=True)
 first = True
 
 all_dfs = []
-for metric_idx in [0, 1]:
-    for ablation_type in ["random_ablation", "zero_ablation"]:
-        for weights_type in ["reset", "trained"]:  # Didn't scramble the weights enough it seems
+
+# METRIC_IDX = [0, 1]
+METRIC_IDX = [0]
+
+# ABLATION_TYPE = ["random_ablation", "zero_ablation"]
+ABLATION_TYPE = ["random_ablation"]
+
+# WEIGHTS_TYPE = ["reset", "trained"]
+WEIGHTS_TYPE = ["trained"]
+
+for metric_idx in METRIC_IDX:
+    for ablation_type in ABLATION_TYPE:
+        for weights_type in WEIGHTS_TYPE:  # Didn't scramble the weights enough it seems
             for plot_type in ["metric_edges_induction", "kl_edges_induction", "metric_edges_4", "kl_edges_4", "kl_edges", "precision_recall", "roc_nodes", "roc_edges", "metric_edges"]:
                 x_key, y_key = plot_type_keys[plot_type]
                 fig, df = make_fig(metric_idx=metric_idx, weights_types=["trained"] if weights_type == "trained" else ["trained", weights_type], ablation_type=ablation_type, x_key=x_key, y_key=y_key, plot_type=plot_type)

@@ -1,7 +1,4 @@
 #%%
-
-"""Currently a notebook so that I can develop the 16 Heads tests fast"""
-
 import math
 from IPython import get_ipython
 
@@ -47,15 +44,13 @@ from acdc.ioi.utils import get_all_ioi_things
 from acdc.TLACDCExperiment import TLACDCExperiment
 from acdc.TLACDCInterpNode import TLACDCInterpNode, heads_to_nodes_to_mask
 from acdc.tracr_task.utils import get_all_tracr_things
-from subnetwork_probing.train import correspondence_from_mask, iterative_correspondence_from_mask
+from subnetwork_probing.train import iterative_correspondence_from_mask
 from notebooks.emacs_plotly_render import set_plotly_renderer
 
 from subnetwork_probing.transformer_lens.transformer_lens.HookedTransformer import HookedTransformer as SPHookedTransformer
 from subnetwork_probing.transformer_lens.transformer_lens.HookedTransformerConfig import HookedTransformerConfig as SPHookedTransformerConfig
 from subnetwork_probing.train import do_random_resample_caching, do_zero_caching
 from subnetwork_probing.transformer_lens.transformer_lens.hook_points import MaskedHookPoint
-
-# set_plotly_renderer("emacs")
 
 #%%
 
@@ -76,12 +71,12 @@ parser.add_argument('--torch-num-threads', type=int, default=0, help="How many t
 
 # for now, force the args to be the same as the ones in the notebook, later make this a CLI tool
 if get_ipython() is not None: # heheh get around this failing in notebooks
-    args = parser.parse_args([line.strip() for line in r"""--task=docstring \
+    args = parser.parse_args([line.strip() for line in r"""--task=induction \
 --wandb-group=pig \
---wandb-entity=josephmiller101\
---wandb-project=pig-not-normalized-1 \
+--wandb-entity=josephmiller101 \
+--wandb-project=pig-not-normalized-test-3 \
 --device=cpu \
---metric=docstring_metric \
+--metric=kl_div \
 --reset-network=0
 """.split("\\\n")]) # so easy to copy and paste into terminal!!!
 # --wandb-run-name=tracr-reverse-pig-1\
@@ -143,6 +138,8 @@ for extra_arg in [
     "use_split_qkv_input",
     "n_devices", # extra from new merge
     "gated_mlp",
+    "use_attn_in",
+    "use_hook_mlp_in",
 ]:
     if extra_arg in kwargs:
         del kwargs[extra_arg]
@@ -152,6 +149,7 @@ model = SPHookedTransformer(cfg, is_masked=True)
 base_model = SPHookedTransformer(cfg, is_masked=True)
 _acdc_model = things.tl_model
 model.load_state_dict(_acdc_model.state_dict(), strict=False)
+base_model.init_weights()
 model = model.to(args.device)
 base_model = base_model.to(args.device)
 
@@ -180,11 +178,13 @@ def replace_masked_hook_points(model):
             replace_masked_hook_points(c)
 with torch.no_grad():
     replace_masked_hook_points(model)
-model.freeze_weights()
 
 # Set the masks to 1, so nothing is masked
 with torch.no_grad():
     for n, p in model.named_parameters():
+        if n.endswith("mask_scores"):
+            p.fill_(1)
+    for n, p in base_model.named_parameters():
         if n.endswith("mask_scores"):
             p.fill_(1)
 
@@ -207,7 +207,7 @@ with torch.no_grad():
 
 
 # %%
-
+torch.autograd.set_detect_anomaly(True)
 pig_scores = {n: None for n, c in model.named_modules() if isinstance(c, SimpleMaskedHookPoint)}
 
 if model.cfg.attn_only == True or model.cfg.d_mlp == -1:
@@ -216,7 +216,13 @@ if model.cfg.attn_only == True or model.cfg.d_mlp == -1:
         if "mlp" in k:
             del pig_scores[k]
 
-SAMPLES = 200
+# for n, c in model.named_modules():
+#     if n in pig_scores.keys():
+#         c.train()
+#     else:
+#         c.eval()
+
+SAMPLES = 50
 weights_to_attribute = {}
 for n in pig_scores.keys():
     if "attn.hook" in n:
@@ -229,15 +235,16 @@ for n in pig_scores.keys():
 integrated_gradients = {n: torch.zeros_like(model.state_dict()[n]) for n in weights_to_attribute.values()}
 prev_loss = None
 prev_grads = None
-model.train()
+
 for n, p in list(model.named_parameters()):
     if n in weights_to_attribute.values():
         p.requires_grad = True
     else:
         p.requires_grad = False
+# %%
 # Run integrated gradients over the model weights between the base_model and _acdc_model
 loss_diff_sum = 0
-for i in range(0, SAMPLES + 1):
+for i in range(1, SAMPLES + 1):
     model.zero_grad()
     new_weights = {}
     for n in weights_to_attribute.values():
@@ -247,10 +254,10 @@ for i in range(0, SAMPLES + 1):
         acdc_weight = _acdc_model.state_dict()[n]
         # new_weights[n] = (1 - i / SAMPLES) * base_weight + (i / SAMPLES) * acdc_weight
         new_weights[n] = base_weight + (i / SAMPLES) * (acdc_weight - base_weight)
-    for n, p in model.state_dict().items():
+    for n, p in _acdc_model.state_dict().items():
         new_weights.setdefault(n, p)
     # Load the new weights
-    model.load_state_dict(new_weights, strict=True)
+    model.load_state_dict(new_weights, strict=False)
     # Run the model
     validation_output = model(things.validation_data)
     loss = things.validation_metric(validation_output, return_one_element=False).mean()
@@ -261,11 +268,15 @@ for i in range(0, SAMPLES + 1):
         loss_diff = loss.item() - prev_loss
         loss_diff_sum += loss_diff
         prev_grads_sum = sum([torch.sum(p ** 2).item() for _, p in prev_grads.items()])
+        # print("prev grads sum", prev_grads_sum)
         for n, p in prev_grads.items():
             integrated_gradients[n] += (p ** 2 * loss_diff) / prev_grads_sum
 
     prev_loss = loss.item()
     prev_grads = {n: dict(model.named_parameters())[n].grad for n in weights_to_attribute.values()}
+    # print("prev_grads", prev_grads)
+    # break
+#%%
 
 for pig_n, weight_n in weights_to_attribute.items():
     integrated_grad = integrated_gradients[weight_n]
@@ -340,7 +351,6 @@ for layer_i in range(model.cfg.n_layers):
         ]
         nodes_names_indices.append((mlp_nodes, name, slice(None)))
 
-
 # sort by scores
 nodes_names_indices.sort(key=lambda x: pig_scores[x[1]][x[2]].item(), reverse=True)
 
@@ -365,14 +375,10 @@ do_random_resample_caching(model, things.test_patch_data)
 if args.zero_ablation:
     do_zero_caching(model)
 
-import copy
-nodes_to_mask = []
 corr = None
 head_parents = None
 for nodes, hook_name, idx in tqdm.tqdm(nodes_names_indices):
-    nodes_to_mask += nodes
-    # COMPARE TO OLD!!!
-    corr, head_parents = iterative_correspondence_from_mask(corr, head_parents, model, new_nodes=nodes, use_pos_embed=False, newv=False)
+    corr, head_parents = iterative_correspondence_from_mask(model, nodes_to_mask=nodes, use_pos_embed=False, newv=False, corr=corr, head_parents=head_parents)
     for e in corr.all_edges().values():
         e.effect_size = 1.0
 
@@ -389,6 +395,7 @@ for nodes, hook_name, idx in tqdm.tqdm(nodes_names_indices):
     assert done, f"Could not find {hook_name}[{idx}]"
 
     to_log_dict = test_metrics(model(things.test_data), score)
+    print("to_log_dict", to_log_dict)
     to_log_dict["number_of_edges"] = corr.count_no_edges()
 
     wandb.log(to_log_dict)
@@ -396,6 +403,3 @@ for nodes, hook_name, idx in tqdm.tqdm(nodes_names_indices):
 # %%
 
 wandb.finish()
-
-#%%
-

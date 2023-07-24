@@ -11,14 +11,15 @@ class KubernetesJob:
     container: str
     cpu: int
     gpu: int
+    memory: str
     mount_training: bool=False
 
     def mount_training_options(self) -> list[str]:
         if not self.mount_training:
             return []
         return [
-            "--volume-mount=/training",
-            "--volume-name=agarriga-models-training",
+            # "--volume-mount=/training",
+            # "--volume-name=agarriga-models-training",
         ]
 
 
@@ -90,12 +91,13 @@ def launch(commands: List[List[str]], name: str, job: Optional[KubernetesJob] = 
                     f"--container={job.container}",
                     f"--cpu={job.cpu}",
                     f"--gpu={job.gpu}",
+                    f"--memory={job.memory}",
                     "--login",
                     "--wandb",
-                    "--never-restart",
+                    # "--never-restart",
                     f"--command={command_str}",
                     "--working-dir=/Automatic-Circuit-Discovery",
-                    "--shared-host-dir=/home/agarriga/.cache",
+                    "--shared-host-dir=/home/jmiller/.cache",
                     "--shared-host-dir-mount=/root/.cache",
                     *job.mount_training_options(),
                 ],

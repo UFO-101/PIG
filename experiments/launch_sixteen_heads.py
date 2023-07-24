@@ -291,7 +291,7 @@ nodes_to_mask = []
 corr, head_parents = None, None
 for nodes, hook_name, idx in tqdm.tqdm(nodes_names_indices):
     nodes_to_mask += nodes
-    corr, head_parents = iterative_correspondence_from_mask(model, nodes_to_mask, use_pos_embed=False, newv=False, corr=corr, head_parents=head_parents)
+    corr, head_parents = iterative_correspondence_from_mask(model, nodes_to_mask=nodes, use_pos_embed=False, newv=False, corr=corr, head_parents=head_parents)
     for e in corr.all_edges().values():
         e.effect_size = 1.0
 
